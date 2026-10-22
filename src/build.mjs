@@ -15,6 +15,12 @@ async function modifiedTime(file, gitDates) {
   return (await stat(file)).mtimeMs;
 }
 
+async function writeGenerated(file,content) {
+  const bytes=Buffer.isBuffer(content)?content:Buffer.from(content);
+  try {if((await readFile(file)).equals(bytes))return;} catch(error) {if(error.code!=='ENOENT')throw error;}
+  await writeFile(file,bytes);
+}
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const b64 = s => Buffer.from(s).toString('base64');
@@ -101,26 +107,29 @@ export async function build(input, output, options = {}) {
       readFile(path.join(here,'../assets/fonts/FurifontSans-Regular.woff2')),
       readFile(path.join(here,'../assets/fonts/OFL.txt'),'utf8'),
       readFile(path.join(here,'../assets/fonts/DATA-LICENSE.md'),'utf8')]);
-    const fontUrl=fontMode==='embed'?`data:font/woff2;base64,${font.toString('base64')}`:'assets/FurifontSans-Regular.woff2';
+    const fontUrl=fontMode==='embed'?`data:font/woff2;base64,${font.toString('base64')}`:'FurifontSans-Regular.woff2';
     if(fontMode!=='system')css=`@font-face{font-family:'Furifont';src:url(${fontUrl}) format('woff2');font-weight:400;font-display:swap}\n${baseCss}`;
     if(fontMode!=='system')notices=`<details class="licenses"><summary>フォント・ライセンス</summary><p>Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe<br>https://github.com/antfu/furifont</p><pre>${escape(ofl+'\n\n'+dict)}</pre></details>`;
-    if(fontMode!=='embed') {await mkdir(path.join(out,'assets'),{recursive:true});await writeFile(path.join(out,'assets/FurifontSans-Regular.woff2'),font);await writeFile(path.join(out,'assets/font-license.txt'),'Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe\nhttps://github.com/antfu/furifont\n\n'+ofl+'\n\n'+dict);}
+    if(fontMode!=='embed') {await mkdir(path.join(out,'assets'),{recursive:true});await writeGenerated(path.join(out,'assets/FurifontSans-Regular.woff2'),font);await writeGenerated(path.join(out,'assets/font-license.txt'),'Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe\nhttps://github.com/antfu/furifont\n\n'+ofl+'\n\n'+dict);}
   }
-  const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><style>${css}</style><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="data:text/javascript;base64,${b64(js)}"></script></body></html>`;
+  await mkdir(path.join(out,'assets'),{recursive:true});
+  await writeGenerated(path.join(out,'assets/style.css'),css);
+  await writeGenerated(path.join(out,'assets/reader.js'),js);
+  const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><link rel="stylesheet" href="assets/style.css"><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="assets/reader.js" defer></script></body></html>`;
   await mkdir(out,{recursive:true});
-  for (const n of novels) await writeFile(path.join(out,n.file),page(n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
+  for (const n of novels) await writeGenerated(path.join(out,n.file),page(n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
   const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length,chapterIds:chapters.map(c=>c.id)}))};
-  await writeFile(path.join(out,'index.html'),page('物語　よむ、きく。',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
-  if(catalogMode==='external') await writeFile(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
+  await writeGenerated(path.join(out,'index.html'),page('物語　よむ、きく。',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
+  if(catalogMode==='external') await writeGenerated(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
   else await unlink(path.join(out,'catalog.json')).catch(e=>{if(e.code!=='ENOENT')throw e;});
-  await writeFile(path.join(out,'.nojekyll'),'');
+  await writeGenerated(path.join(out,'.nojekyll'),'');
   const manifest=path.join(out,'.mdyomukiku-generated.json');
   let previous=[];
   try {previous=JSON.parse(await readFile(manifest,'utf8'));} catch(e) {if(e.code!=='ENOENT') throw e;}
   const current=novels.map(n=>n.file);
   if (!Array.isArray(previous)) throw new Error('生成ファイル一覧が不正です');
   for(const file of previous) if(typeof file==='string' && /^work-[A-Za-z0-9_-]+\.html$/.test(file) && !current.includes(file)) await unlink(path.join(out,file)).catch(e=>{if(e.code!=='ENOENT')throw e;});
-  await writeFile(manifest,JSON.stringify(current));
+  await writeGenerated(manifest,JSON.stringify(current));
   return {count:novels.length,output:out};
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href) {
