@@ -83,7 +83,7 @@ export async function build(input, output, options = {}) {
       if (dir.name==='.' && path.dirname(file)!==root) continue;
       const source=await readFile(file,'utf8');
       const match=source.match(/^#\s+(.+)\r?$/m);
-      novel.chapters.push({title:match?.[1]||path.basename(file,'.md'),html:await render(source,file,folder)});
+      novel.chapters.push({id:path.relative(folder,file).split(path.sep).join('/'),title:match?.[1]||path.basename(file,'.md'),html:await render(source,file,folder)});
       if(!meta.updated) updated=Math.max(updated,await modifiedTime(file,options.gitDates));
     }
     novel.updated=meta.updated||new Date(updated).toISOString().slice(0,10);
@@ -96,20 +96,20 @@ export async function build(input, output, options = {}) {
   }
   const [baseCss,js]=await Promise.all(['style.css','reader.js'].map(f=>readFile(path.join(here,f),'utf8')));
   let css=baseCss, notices='';
-  if (fontMode!=='system') {
+  {
     const [font,ofl,dict]=await Promise.all([
       readFile(path.join(here,'../assets/fonts/FurifontSans-Regular.woff2')),
       readFile(path.join(here,'../assets/fonts/OFL.txt'),'utf8'),
       readFile(path.join(here,'../assets/fonts/DATA-LICENSE.md'),'utf8')]);
     const fontUrl=fontMode==='embed'?`data:font/woff2;base64,${font.toString('base64')}`:'assets/FurifontSans-Regular.woff2';
-    css=`@font-face{font-family:'Furifont';src:url(${fontUrl}) format('woff2');font-weight:400;font-display:swap}\n${baseCss}`;
-    notices=`<details class="licenses"><summary>フォント・ライセンス</summary><p>Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe<br>https://github.com/antfu/furifont</p><pre>${escape(ofl+'\n\n'+dict)}</pre></details>`;
-    if(fontMode==='external') {await mkdir(path.join(out,'assets'),{recursive:true});await writeFile(path.join(out,'assets/FurifontSans-Regular.woff2'),font);}
+    if(fontMode!=='system')css=`@font-face{font-family:'Furifont';src:url(${fontUrl}) format('woff2');font-weight:400;font-display:swap}\n${baseCss}`;
+    if(fontMode!=='system')notices=`<details class="licenses"><summary>フォント・ライセンス</summary><p>Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe<br>https://github.com/antfu/furifont</p><pre>${escape(ofl+'\n\n'+dict)}</pre></details>`;
+    if(fontMode!=='embed') {await mkdir(path.join(out,'assets'),{recursive:true});await writeFile(path.join(out,'assets/FurifontSans-Regular.woff2'),font);await writeFile(path.join(out,'assets/font-license.txt'),'Furifont Sans Regular v0.6.2 — Anthony Fu / Source Han Sans JP — Adobe\nhttps://github.com/antfu/furifont\n\n'+ofl+'\n\n'+dict);}
   }
   const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><style>${css}</style><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="data:text/javascript;base64,${b64(js)}"></script></body></html>`;
   await mkdir(out,{recursive:true});
-  for (const n of novels) await writeFile(path.join(out,n.file),page(n.title,{type:'novel',novel:n}));
-  const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length}))};
+  for (const n of novels) await writeFile(path.join(out,n.file),page(n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
+  const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length,chapterIds:chapters.map(c=>c.id)}))};
   await writeFile(path.join(out,'index.html'),page('小説の本棚',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
   if(catalogMode==='external') await writeFile(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
   else await unlink(path.join(out,'catalog.json')).catch(e=>{if(e.code!=='ENOENT')throw e;});
