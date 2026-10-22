@@ -4,10 +4,11 @@
   "description": "Markdownから音声対応の単体HTML小説サイトを生成",
   "scripts": {
     "build": "node src/build.mjs",
-    "demo": "node src/build.mjs examples/novels docs",
+    "demo": "node src/build.mjs novels docs --git-dates",
     "test": "node --test",
     "dev": "node src/preview.mjs",
-    "preview": "node src/preview.mjs"
+    "preview": "node src/preview.mjs",
+    "build:site": "node src/build.mjs novels docs --git-dates"
   },
   "repository": {
     "type": "git",

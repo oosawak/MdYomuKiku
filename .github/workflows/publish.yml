@@ -1,0 +1,87 @@
+name: Build novels and publish Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'novels/**'
+      - 'src/**'
+      - 'assets/**'
+      - 'test/**'
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/publish.yml'
+  schedule:
+    - cron: '17 0,12 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: novels-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      publish: ${{ steps.generated.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm test
+      - name: Generate HTML and catalog
+        run: npm run build:site
+      - name: Commit generated changes
+        id: generated
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          git add -- docs
+          if git diff --cached --quiet; then
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo 'publish=false' >> "$GITHUB_OUTPUT"
+            else
+              echo 'publish=true' >> "$GITHUB_OUTPUT"
+            fi
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Update generated novel site'
+            git push origin HEAD:main
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload Pages artifact
+        if: steps.generated.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

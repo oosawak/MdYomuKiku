@@ -1,12 +1,27 @@
-(() => {
+(async () => {
 'use strict';
-const data=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(document.querySelector('#book-data').textContent.trim()),c=>c.charCodeAt(0))));
+let data=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(document.querySelector('#book-data').textContent.trim()),c=>c.charCodeAt(0))));
 const app=document.querySelector('#app');
+if(data.catalogUrl) {
+  app.innerHTML='<p class="empty" role="status">作品一覧を読み込んでいます…</p>';
+  try {
+    const response=await fetch(new URL(data.catalogUrl,location.href),{cache:'no-store'});
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const catalog=await response.json();
+    if(catalog.type!=='library'||!Array.isArray(catalog.novels)) throw new Error('一覧データの形式が不正です');
+    data={...catalog,fontMode:data.fontMode};
+  } catch(error) {
+    app.innerHTML='<main class="library"><h1>作品一覧を読み込めませんでした</h1><p>プレビューは <code>npm run dev</code> で起動し、HTTPのURLから開いてください。公開先では index.html と catalog.json を同じフォルダーに配置してください。</p><p>HTMLを直接開く場合は <code>--catalog embed</code> で再生成できます。</p><button id="reload">再読み込み</button></main>';
+    document.querySelector('#reload').onclick=()=>location.reload();
+    console.error('作品一覧の読み込み失敗:',error);
+    return;
+  }
+}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}};
 const save=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{}};
 let theme=read('theme','paper');document.documentElement.dataset.theme=theme;
-const header=`<header><a class="brand" href="index.html"><span class="brand-icon">文</span> よむ、きく。<small>物語のある場所</small></a><button id="theme" class="quiet" aria-label="配色を切り替え">配色：${theme==='night'?'夜':'紙'}</button></header>`;
+const header=`<header><a class="brand" href="index.html"><span class="brand-icon">MD</span> よむ、きく。<small>物語のある場所</small></a><button id="theme" class="quiet" aria-label="配色を切り替え">配色：${theme==='night'?'夜':'紙'}</button></header>`;
 app.innerHTML=header;
 document.querySelector('#theme').onclick=e=>{theme=theme==='night'?'paper':'night';document.documentElement.dataset.theme=theme;save('theme',theme);e.target.textContent=`配色：${theme==='night'?'夜':'紙'}`;};
 const cover=n=>n.cover?`<img class="cover" src="${esc(n.cover)}" alt="${esc(n.title)}の表紙">`:`<div class="cover generated"><span>物 語</span><b>${esc(n.title)}</b><small>${esc(n.author)}</small></div>`;

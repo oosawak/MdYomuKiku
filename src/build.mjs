@@ -1,7 +1,19 @@
 import { readFile, readdir, mkdir, writeFile, stat, realpath, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { Marked } from 'marked';
+
+const execFileAsync=promisify(execFile);
+async function modifiedTime(file, gitDates) {
+  if(gitDates) {
+    const {stdout}=await execFileAsync('git',['log','-1','--format=%cI','--',file],{cwd:path.dirname(file)});
+    const date=Date.parse(stdout.trim());
+    if(Number.isFinite(date)) return date;
+  }
+  return (await stat(file)).mtimeMs;
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -40,6 +52,8 @@ async function render(md, file, root) {
 }
 export async function build(input, output, options = {}) {
   const fontMode=options.font || 'system';
+  const catalogMode=options.catalog || 'external';
+  if (!['embed','external'].includes(catalogMode)) throw new Error('--catalog は embed / external から指定してください');
   if (!['system','embed','external'].includes(fontMode)) throw new Error('--font は system / embed / external から指定してください');
   const root = await realpath(input);
   const out = path.resolve(output);
@@ -70,7 +84,7 @@ export async function build(input, output, options = {}) {
       const source=await readFile(file,'utf8');
       const match=source.match(/^#\s+(.+)\r?$/m);
       novel.chapters.push({title:match?.[1]||path.basename(file,'.md'),html:await render(source,file,folder)});
-      updated=Math.max(updated,(await stat(file)).mtimeMs);
+      if(!meta.updated) updated=Math.max(updated,await modifiedTime(file,options.gitDates));
     }
     novel.updated=meta.updated||new Date(updated).toISOString().slice(0,10);
     if (Number.isNaN(Date.parse(novel.updated))) throw new Error(`${folder}: updated が不正です`);
@@ -95,7 +109,10 @@ export async function build(input, output, options = {}) {
   const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><style>${css}</style><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="data:text/javascript;base64,${b64(js)}"></script></body></html>`;
   await mkdir(out,{recursive:true});
   for (const n of novels) await writeFile(path.join(out,n.file),page(n.title,{type:'novel',novel:n}));
-  await writeFile(path.join(out,'index.html'),page('小説の本棚', {type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length}))}));
+  const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length}))};
+  await writeFile(path.join(out,'index.html'),page('小説の本棚',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
+  if(catalogMode==='external') await writeFile(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
+  else await unlink(path.join(out,'catalog.json')).catch(e=>{if(e.code!=='ENOENT')throw e;});
   await writeFile(path.join(out,'.nojekyll'),'');
   const manifest=path.join(out,'.mdyomukiku-generated.json');
   let previous=[];
@@ -108,11 +125,11 @@ export async function build(input, output, options = {}) {
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href) {
   const args=process.argv.slice(2);
-  if (args.includes('--help') || !args.length) console.log('使い方: npm run build -- <小説フォルダー> [出力先=docs] [--font system|embed|external]\n各作品フォルダーに novel.json と *.md を配置してください。フォントの初期値はsystemです。');
+  if (args.includes('--help') || !args.length) console.log('使い方: npm run build -- <小説フォルダー> [出力先=docs] [--font system|embed|external] [--catalog external|embed] [--git-dates]\n各作品フォルダーに novel.json と *.md を配置してください。フォントの初期値はsystem、一覧データはexternalです。');
   else try {
-    const positional=[];let font='system';
-    for(let i=0;i<args.length;i++) {if(args[i]==='--font') font=args[++i]||'invalid';else if(args[i].startsWith('--')) throw new Error(`不明なオプション: ${args[i]}`);else positional.push(args[i]);}
+    const positional=[];let font='system',catalog='external',gitDates=false;
+    for(let i=0;i<args.length;i++) {if(args[i]==='--font') font=args[++i]||'invalid';else if(args[i]==='--catalog')catalog=args[++i]||'invalid';else if(args[i]==='--git-dates')gitDates=true;else if(args[i].startsWith('--')) throw new Error(`不明なオプション: ${args[i]}`);else positional.push(args[i]);}
     if(!positional.length || positional.length>2) throw new Error('入力フォルダーと任意の出力先を指定してください');
-    const result=await build(positional[0],positional[1]||'docs',{font});console.log(`${result.count}作品を生成しました: ${result.output} (font: ${font})`);
+    const result=await build(positional[0],positional[1]||'docs',{font,catalog,gitDates});console.log(`${result.count}作品を生成しました: ${result.output} (font: ${font})`);
   } catch(e) {console.error(`生成失敗: ${e.message}`);process.exitCode=1;}
 }

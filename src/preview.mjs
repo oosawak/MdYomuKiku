@@ -6,7 +6,7 @@ import { build } from './build.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const output=path.join(root,'docs');
-await build(path.join(root,'examples/novels'),output);
+await build(path.join(root,'novels'),output,{gitDates:true});
 const types={'.html':'text/html; charset=utf-8','.woff2':'font/woff2','.json':'application/json; charset=utf-8'};
 const server=http.createServer(async(req,res)=>{
   try {
