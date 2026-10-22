@@ -53,7 +53,7 @@ function renderApp(){
   const useHash=!rendered;rendered=true;
   stopPlayback();
   let theme=settings().theme||'paper';document.documentElement.dataset.theme=theme;
-  app.innerHTML=`<header><a class="brand" href="index.html"><span class="brand-icon">MD</span> よむ、きく。<small>物語のある場所</small></a><div class="header-actions"><label>ユーザー <select id="profile" aria-label="ユーザーを切り替え">${profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><button id="settings-open">設定</button><button id="theme" class="quiet" aria-label="配色を切り替え">配色：${theme==='night'?'夜':'紙'}</button></div></header>`;
+  app.innerHTML=`<header><a class="brand" href="index.html"><span class="brand-icon">物語</span> よむ、きく。<small>物語のある場所</small></a><div class="header-actions"><label>ユーザー <select id="profile" aria-label="ユーザーを切り替え">${profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><button id="settings-open">設定</button><button id="theme" class="quiet" aria-label="配色を切り替え">配色：${theme==='night'?'夜':'紙'}</button></div></header>`;
   document.querySelector('#profile').value=active;
   document.querySelector('#profile').onchange=e=>{active=e.target.value;save('mdyomu:active',active);renderApp();};
   document.querySelector('#theme').onclick=e=>{theme=theme==='night'?'paper':'night';document.documentElement.dataset.theme=theme;changeSettings({theme});e.target.textContent=`配色：${theme==='night'?'夜':'紙'}`;};

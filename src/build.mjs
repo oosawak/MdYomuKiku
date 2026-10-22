@@ -110,7 +110,7 @@ export async function build(input, output, options = {}) {
   await mkdir(out,{recursive:true});
   for (const n of novels) await writeFile(path.join(out,n.file),page(n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
   const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length,chapterIds:chapters.map(c=>c.id)}))};
-  await writeFile(path.join(out,'index.html'),page('小説の本棚',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
+  await writeFile(path.join(out,'index.html'),page('物語　よむ、きく。',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
   if(catalogMode==='external') await writeFile(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
   else await unlink(path.join(out,'catalog.json')).catch(e=>{if(e.code!=='ENOENT')throw e;});
   await writeFile(path.join(out,'.nojekyll'),'');
