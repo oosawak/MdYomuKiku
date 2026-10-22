@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, cp, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { utimes } from 'node:fs/promises';
-import { JSDOM } from 'jsdom';
+import { JSDOM, requestInterceptor, VirtualConsole } from 'jsdom';
+import { pathToFileURL } from 'node:url';
 import { build as buildSite } from '../src/build.mjs';
 const build=(input,output,options={})=>buildSite(input,output,{catalog:'embed',...options});
 const decode=html=>JSON.parse(Buffer.from(html.match(/id="book-data"[^>]*>([^<]+)/)[1],'base64').toString());
@@ -81,4 +82,22 @@ test('inserting a chapter keeps read marks and resume attached to the original f
 });
 test('blocked local storage still allows temporary user choices and reports the save limit',async()=>{
  const f=await fixture();await build(f.input,f.out);const html=await readFile(path.join(f.out,'index.html'),'utf8');const d=dom(html,{},w=>{Object.defineProperty(w,'localStorage',{get(){throw new Error('blocked');}});});d.window.document.querySelector('.favorite').click();assert.equal(d.window.document.querySelector('.favorite').getAttribute('aria-pressed'),'true');assert.match(d.window.document.querySelector('#storage-note').textContent,/保存できません/);d.window.close();
+});
+test('changing only shared JS and CSS leaves every generated HTML and catalog untouched',async()=>{
+ const f=await fixture();const clone=path.join(f.tmp,'tool');await mkdir(clone);await cp(new URL('../src',import.meta.url),path.join(clone,'src'),{recursive:true});await cp(new URL('../assets',import.meta.url),path.join(clone,'assets'),{recursive:true});await symlink(path.resolve('node_modules'),path.join(clone,'node_modules'),'dir');
+ const {build:generate}=await import(pathToFileURL(path.join(clone,'src/build.mjs')));
+ await generate(f.input,f.out);const names=(await readdir(f.out)).filter(n=>n.endsWith('.html')||n==='catalog.json');const before=new Map();
+ for(const name of names){await utimes(path.join(f.out,name),new Date('2000-01-01'),new Date('2000-01-01'));before.set(name,await readFile(path.join(f.out,name),'utf8'));}
+ const oldJs=await readFile(path.join(f.out,'assets/reader.js'),'utf8');const oldCss=await readFile(path.join(f.out,'assets/style.css'),'utf8');
+ await writeFile(path.join(clone,'src/reader.js'),oldJs+'\n// Updated shared behavior\n');await writeFile(path.join(clone,'src/style.css'),oldCss+'\n/* Updated shared design */\n');await generate(f.input,f.out);
+ for(const name of names){assert.equal(await readFile(path.join(f.out,name),'utf8'),before.get(name));assert.equal((await stat(path.join(f.out,name))).mtimeMs,new Date('2000-01-01').getTime());}
+ assert.notEqual(await readFile(path.join(f.out,'assets/reader.js'),'utf8'),oldJs);assert.notEqual(await readFile(path.join(f.out,'assets/style.css'),'utf8'),oldCss);
+ for(const name of names.filter(n=>n.endsWith('.html'))){assert.match(before.get(name),/href="assets\/style.css"/);assert.match(before.get(name),/src="assets\/reader.js" defer/);assert.ok(!before.get(name).includes('data:text/javascript;base64,'));}
+});
+test('generated external scripts and styles load together and render the library',async()=>{
+ const f=await fixture();await buildSite(f.input,f.out);const html=await readFile(path.join(f.out,'index.html'),'utf8');const catalog=JSON.parse(await readFile(path.join(f.out,'catalog.json'),'utf8'));const errors=[],requests=[];
+ const resources={interceptors:[requestInterceptor(async request=>{const relative=new URL(request.url).pathname.replace('/MdYomuKiku/','');requests.push(relative);return new Response(await readFile(path.join(f.out,relative)),{headers:{'Content-Type':relative.endsWith('.js')?'text/javascript':'text/css'}});})]};
+ const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const d=new JSDOM(html,{url:'https://example.test/MdYomuKiku/',runScripts:'dangerously',resources,virtualConsole:vc,beforeParse(w){w.TextDecoder=TextDecoder;w.fetch=async()=>({ok:true,json:async()=>catalog});}});
+ await new Promise(resolve=>d.window.addEventListener('load',()=>setTimeout(resolve,10)));
+ assert.deepEqual(errors,[]);assert.ok(requests.includes('assets/reader.js'));assert.ok(requests.includes('assets/style.css'));assert.equal(d.window.document.querySelectorAll('.book').length,1);d.window.document.querySelector('#about-open').click();assert.ok(d.window.document.querySelector('#about-dialog').open);d.window.document.querySelector('#about-close').click();assert.equal(d.window.document.querySelector('#about-dialog').open,false);d.window.close();
 });

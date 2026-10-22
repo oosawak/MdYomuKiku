@@ -87,10 +87,10 @@ npm run build -- ./novels ./docs --font external
 | 値 | 動作 |
 | --- | --- |
 | `system` | 初期表示は端末の標準フォント。HTMLへフォントは埋め込まず、ふりがな用の共有ファイルを `assets/` に出力 |
-| `embed` | Furifontを各HTMLへBase64で埋め込む。各ページ約8.7MB増加 |
+| `embed` | Furifontを共有CSSへBase64で埋め込む。CSSが約8.7MB増加 |
 | `external` | `assets/FurifontSans-Regular.woff2` を全HTMLで共有。HTMLとassetsを一緒に公開 |
 
-Furifont Sans Regular v0.6.2を収録しています。`system` でも本文の「ふりがな → あり」で共有フォントを必要時に読み込みます。初期値は「なし」です。`docs/assets/` も一緒に公開してください。HTML単体で持ち出した場合、標準フォントでの閲覧は可能ですが、この切り替えには共有フォントが必要です。ふりがなはフォントの合字で描かれ、文脈や固有名詞で読みが誤る場合があります。Furifont使用時は本文でふりがなを無効にし、端末フォントに切り替えられます。利用条件と出典は [assets/fonts](assets/fonts/README.md) と生成HTML内に収録しています。
+Furifont Sans Regular v0.6.2を収録しています。`system` でも本文の「ふりがな → あり」で共有フォントを必要時に読み込みます。初期値は「なし」です。`docs/assets/` も一緒に公開してください。HTMLだけでは閲覧用JS・CSSが不足するため、公開・持ち運びの際は `assets/` も必要です。ふりがなはフォントの合字で描かれ、文脈や固有名詞で読みが誤る場合があります。Furifont使用時は本文でふりがなを無効にし、端末フォントに切り替えられます。利用条件と出典は [assets/fonts](assets/fonts/README.md) と生成HTML内に収録しています。
 
 ## 閲覧機能
 
@@ -107,7 +107,7 @@ Furifont Sans Regular v0.6.2を収録しています。`system` でも本文の�
 
 音声は端末やブラウザーの機能を使用し、音声データ自体はHTMLに含めません。利用できる声・日本語への対応・通信の必要性は端末によって異なります。フォントのふりがなと読み上げエンジンの読みは別です。
 
-作品本文JSONとJavaScriptはBase64、CSSはインラインで保存します。`system` / `embed` なら各作品のHTML単体で本文を閲覧できます。作品一覧との相互リンクを使う場合は `index.html` と作品HTMLを同じフォルダーに置いてください。Base64は暗号化ではありません。出力された本文は閲覧者が取り出せます。
+作品本文JSONと画像はHTML内にBase64で保存します。JavaScriptとCSSは `assets/reader.js` と `assets/style.css` を全ページで共有します。HTML単体ではなく、`docs/` の内容をまとめて公開・持ち運びしてください。共通JS・CSSを変更しても、内容が同じ作品HTMLは書き直しません。共有ファイル名は固定なので、公開後に古い表示が残る場合はブラウザーを強制再読み込みしてください。Base64は暗号化ではありません。出力された本文は閲覧者が取り出せます。
 
 本文は作品ページにだけ含め、トップには紹介情報だけを入れます。非常に大きな作品はブラウザーのメモリーと読み込み時間を使います。ブラウザー内検索は作品情報が対象で、本文の横断検索は行いません。
 
@@ -131,12 +131,16 @@ docs/
   index.html          ← 一覧を表示する画面
   catalog.json        ← 全作品の紹介・ジャンル・タグ・優先度・表紙
   work-….html         ← 作品ごとの本文入りHTML
+  assets/
+    reader.js         ← 全ページ共通の閲覧機能
+    style.css         ← 全ページ共通のデザイン
+    FurifontSans-Regular.woff2
   .nojekyll
 ```
 
-作品を追加・更新すると、CLIが `catalog.json` と対象作品のHTMLを生成します。デザインやスクリプトが同じなら `index.html` 自体は変わりません。`catalog.json` は生成物なので、直接編集せず `novels/作品名/novel.json` を編集してください。削除した作品は一覧と旧作品HTMLからも除きます。
+作品を追加・更新すると、CLIが `catalog.json` と対象作品のHTMLを生成します。共通デザインや機能の変更は主に `assets/style.css` と `assets/reader.js` に反映され、作品の追加だけなら `index.html` 自体は変わりません。`catalog.json` は生成物なので、直接編集せず `novels/作品名/novel.json` を編集してください。削除した作品は一覧と旧作品HTMLからも除きます。
 
-外部JSONはHTTP経由で読み込むので、プレビューは `npm run dev` を使用してください。一覧を含めてHTMLを直接開きたい場合は埋め込み方式も選べます。
+外部JSONはHTTP経由で読み込むので、プレビューは `npm run dev` を使用してください。一覧を含めてHTMLを直接開きたい場合は一覧JSONの埋め込み方式も選べます。どちらの方式も、共通のJS・CSSを含む `assets/` は必要です。
 
 ```bash
 npm run build -- ./novels ./docs --catalog embed

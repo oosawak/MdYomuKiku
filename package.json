@@ -1,7 +1,7 @@
 {
   "name": "mdyomukiku",
   "version": "1.0.0",
-  "description": "Markdownから音声対応の単体HTML小説サイトを生成",
+  "description": "Markdownから音声対応の静的小説サイトを生成",
   "scripts": {
     "build": "node src/build.mjs",
     "demo": "node src/build.mjs novels docs --git-dates",
