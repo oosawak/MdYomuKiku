@@ -140,6 +140,8 @@ npm run build -- ./novels ./docs --catalog embed
 
 ## GitHub ActionsとPages
 
+初回設定、実行間隔の変更、コメント化による停止・再開は [GitHub Actionsの設定手順](guides/github-actions.md) を参照してください。
+
 [.github/workflows/publish.yml](.github/workflows/publish.yml) が以下のタイミングで `novels/` から `docs/` を生成します。
 
 - `main` へ原稿・画像・生成コードなどの変更をpushしたとき。
