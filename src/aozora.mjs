@@ -31,7 +31,9 @@ export function parseAozora(source,fallbackTitle='本文'){
   const header=boundary<0?[]:text.slice(0,boundary).split('\n').map(s=>s.trim()).filter(Boolean);
   const hasHeader=header.length>=2&&header.length<=8;
   const title=hasHeader?header[0]:fallbackTitle;
-  const author=hasHeader?(header.at(-1).endsWith('訳')&&header.length>=3?header.at(-2):header.at(-1)):'';
+  const authorIndex=hasHeader?(header.at(-1).endsWith('訳')&&header.length>=3?header.length-2:header.length-1):-1;
+  const author=hasHeader?header[authorIndex]:'';
+  const subtitle=hasHeader?header.slice(1,authorIndex).join('　'):'';
   let body=hasHeader?text.slice(boundary+2):text;
   // The initial block describes notation, not the story. Keep it in the source notes.
   let notation='';
@@ -55,7 +57,7 @@ export function parseAozora(source,fallbackTitle='本文'){
   }
   const notes=[hasHeader?header.join('\n'):'',notation,colophon].filter(Boolean).join('\n\n');
   const html=blocks.join('\n')+(notes?`\n<details class="aozora-source"><summary>作品情報・底本・入力者など</summary><pre>${escape(notes)}</pre></details>`:'');
-  return {title,author,html};
+  return {title,subtitle,author,html};
 }
 export async function readAozoraZip(file){
   try{

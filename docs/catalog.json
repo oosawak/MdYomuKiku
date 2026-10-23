@@ -486,6 +486,23 @@
       ]
     },
     {
+      "id": "三国志",
+      "title": "三国志",
+      "author": "吉川英治",
+      "genre": "青空文庫",
+      "description": "",
+      "status": "完結済",
+      "tags": [],
+      "priority": 0,
+      "updated": "2026-10-23",
+      "cover": "",
+      "file": "work-5LiJ5Zu95b-X.html",
+      "count": 1,
+      "chapterIds": [
+        "52409_ruby_51058.zip!/01jo.txt"
+      ]
+    },
+    {
       "id": "三分間の宇宙飛行",
       "title": "三分間の宇宙飛行",
       "author": "七瀬 圭",

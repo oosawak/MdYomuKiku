@@ -92,7 +92,7 @@ export async function build(input, output, options = {}) {
       if(/\.zip$/i.test(file)){
         const imported=await readAozoraZip(file);
         if(!novel.chapters.length){if(!meta.title)novel.title=imported[0].title;if(!meta.author&&imported[0].author)novel.author=imported[0].author;if(!meta.genre)novel.genre='青空文庫';if(!meta.status)novel.status='完結済';}
-        for(const entry of imported)novel.chapters.push({id:`${relative}!/${entry.entry}`,title:entry.title,html:entry.html,format:'aozora'});
+        for(const entry of imported)novel.chapters.push({id:`${relative}!/${entry.entry}`,title:entry.subtitle||entry.title,html:entry.html,format:'aozora'});
       }else{
         const source=await readFile(file,'utf8');
         const match=source.match(/^#\s+(.+)\r?$/m);

@@ -134,3 +134,11 @@ test('original Aozora ruby toggles without a font and speech uses readings only 
  const f=await zipFixture();await build(f.input,f.out);const entry=decode(await readFile(path.join(f.out,'index.html'),'utf8')).novels[0];const html=await readFile(path.join(f.out,entry.file),'utf8');let audio;const d=dom(html,{},w=>{audio=mockSpeech(w);});const doc=d.window.document;assert.ok(doc.querySelector('#body').classList.contains('aozora-text'));assert.ok(doc.querySelector('ruby rt'));selectValue(d,'furigana','on');assert.equal(doc.querySelector('#optional-furigana-font'),null);assert.match(doc.querySelector('#furigana-status').textContent,/原文/);assert.equal(doc.querySelector('#body').classList.contains('no-furigana'),false);
  doc.querySelector('#listen').click();const spoken=audio.spoken.at(-1).text;assert.match(spoken,/ぎんが/);assert.ok(!spoken.includes('銀河ぎんが'));assert.ok(!spoken.includes('入力'));selectValue(d,'furigana','off');assert.ok(doc.querySelector('#body').classList.contains('no-furigana'));d.window.close();
 });
+test('Aozora volume subtitles become distinct episode titles under the same novel',async()=>{
+ const f=await zipFixture();
+ await writeFile(path.join(f.folder,'book.zip'),zipSync({'01.txt':strToU8('三国志\n序\n架空 著者\n\n序の本文です。')}));
+ await writeFile(path.join(f.folder,'volume2.zip'),zipSync({'02.txt':strToU8('三国志\n桃園の巻\n架空 著者\n\n続きの本文です。')}));
+ await buildSite(f.input,f.out);const catalog=JSON.parse(await readFile(path.join(f.out,'catalog.json'),'utf8'));assert.equal(catalog.novels.length,1);assert.equal(catalog.novels[0].title,'三国志');assert.equal(catalog.novels[0].count,2);
+ const novel=decode(await readFile(path.join(f.out,catalog.novels[0].file),'utf8')).novel;assert.deepEqual(novel.chapters.map(c=>c.title),['序','桃園の巻']);assert.equal(novel.author,'架空 著者');assert.match(novel.chapters[1].html,/続きの本文です/);
+ const translated=parseAozora('作品\n原作者\n翻訳者訳\n\n本文です。');assert.equal(translated.author,'原作者');assert.equal(translated.subtitle,'');
+});
