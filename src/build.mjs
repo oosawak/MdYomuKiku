@@ -103,7 +103,12 @@ export async function build(input, output, options = {}) {
     novel.updated=meta.updated||new Date(updated).toISOString().slice(0,10);
     if (Number.isNaN(Date.parse(novel.updated))) throw new Error(`${folder}: updated が不正です`);
     let cover=meta.cover;
-    if (!cover) {try {await stat(path.join(folder,'cover.png'));cover='cover.png';}catch(e){if(e.code!=='ENOENT')throw e;}}
+    if (!cover) {
+      for(const name of ['cover.png','cover.jpg','cover.jpeg']) {
+        try {await stat(path.join(folder,name));cover=name;break;}
+        catch(error) {if(error.code!=='ENOENT')throw error;}
+      }
+    }
     novel.cover=cover?await imageData(path.resolve(folder,cover),folder):'';
     novel.file=`work-${dir.name==='.'?'root-':''}${Buffer.from(novel.id).toString('base64url')}.html`;
     novels.push(novel);
