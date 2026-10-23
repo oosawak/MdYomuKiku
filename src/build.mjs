@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Marked } from 'marked';
+import { readAozoraZip } from './aozora.mjs';
 
 const execFileAsync=promisify(execFile);
 async function modifiedTime(file, gitDates) {
@@ -38,7 +39,7 @@ async function files(dir, recursive = true) {
     if (e.name.startsWith('.')) continue;
     const full = path.join(dir,e.name);
     if (recursive && e.isDirectory()) result.push(...await files(full));
-    else if (e.isFile() && /\.md$/i.test(e.name)) result.push(full);
+    else if (e.isFile() && /\.(?:md|zip)$/i.test(e.name)) result.push(full);
   }
   return result.sort((a,b)=>a.localeCompare(b,'ja',{numeric:true}));
 }
@@ -68,7 +69,7 @@ export async function build(input, output, options = {}) {
   if (actualOut===root || actualOut.startsWith(root+path.sep)) throw new Error('出力先は入力フォルダーの外を指定してください');
   if (out === root || out.startsWith(root+path.sep)) throw new Error('出力先は入力フォルダーの外を指定してください');
   const dirs = (await readdir(root,{withFileTypes:true})).filter(e=>e.isDirectory()&&!e.name.startsWith('.')).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
-  if ((await readdir(root)).some(n=>/\.md$/i.test(n))) dirs.unshift({name:'.'});
+  if ((await readdir(root)).some(n=>/\.(?:md|zip)$/i.test(n))) dirs.unshift({name:'.'});
   const novels=[];
   for (const dir of dirs) {
     const folder = await realpath(path.join(root,dir.name));
@@ -87,9 +88,16 @@ export async function build(input, output, options = {}) {
     for (const file of chapters) {
       // Root-level work does not include sibling work directories.
       if (dir.name==='.' && path.dirname(file)!==root) continue;
-      const source=await readFile(file,'utf8');
-      const match=source.match(/^#\s+(.+)\r?$/m);
-      novel.chapters.push({id:path.relative(folder,file).split(path.sep).join('/'),title:match?.[1]||path.basename(file,'.md'),html:await render(source,file,folder)});
+      const relative=path.relative(folder,file).split(path.sep).join('/');
+      if(/\.zip$/i.test(file)){
+        const imported=await readAozoraZip(file);
+        if(!novel.chapters.length){if(!meta.title)novel.title=imported[0].title;if(!meta.author&&imported[0].author)novel.author=imported[0].author;if(!meta.genre)novel.genre='青空文庫';if(!meta.status)novel.status='完結済';}
+        for(const entry of imported)novel.chapters.push({id:`${relative}!/${entry.entry}`,title:entry.title,html:entry.html,format:'aozora'});
+      }else{
+        const source=await readFile(file,'utf8');
+        const match=source.match(/^#\s+(.+)\r?$/m);
+        novel.chapters.push({id:relative,title:match?.[1]||path.basename(file,'.md'),html:await render(source,file,folder)});
+      }
       if(!meta.updated) updated=Math.max(updated,await modifiedTime(file,options.gitDates));
     }
     novel.updated=meta.updated||new Date(updated).toISOString().slice(0,10);
@@ -134,7 +142,7 @@ export async function build(input, output, options = {}) {
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href) {
   const args=process.argv.slice(2);
-  if (args.includes('--help') || !args.length) console.log('使い方: npm run build -- <小説フォルダー> [出力先=docs] [--font system|embed|external] [--catalog external|embed] [--git-dates]\n各作品フォルダーに novel.json と *.md を配置してください。フォントの初期値はsystem、一覧データはexternalです。');
+  if (args.includes('--help') || !args.length) console.log('使い方: npm run build -- <小説フォルダー> [出力先=docs] [--font system|embed|external] [--catalog external|embed] [--git-dates]\n各作品フォルダーに novel.json と *.md または青空文庫の *.zip を配置してください。フォントの初期値はsystem、一覧データはexternalです。');
   else try {
     const positional=[];let font='system',catalog='external',gitDates=false;
     for(let i=0;i<args.length;i++) {if(args[i]==='--font') font=args[++i]||'invalid';else if(args[i]==='--catalog')catalog=args[++i]||'invalid';else if(args[i]==='--git-dates')gitDates=true;else if(args[i].startsWith('--')) throw new Error(`不明なオプション: ${args[i]}`);else positional.push(args[i]);}

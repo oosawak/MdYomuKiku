@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/oosawak/MdYomuKiku#readme",
   "dependencies": {
+    "fflate": "^0.8.3",
     "marked": "^18.1.1"
   },
   "devDependencies": {

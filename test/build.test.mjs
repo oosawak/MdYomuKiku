@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { zipSync, strToU8 } from 'fflate';
+import { parseAozora, decodeAozora } from '../src/aozora.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, cp, stat } from 'node:fs/promises';
@@ -112,4 +114,23 @@ test('generated external scripts and styles load together and render the library
  const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const d=new JSDOM(html,{url:'https://example.test/MdYomuKiku/',runScripts:'dangerously',resources,virtualConsole:vc,beforeParse(w){w.TextDecoder=TextDecoder;w.fetch=async()=>({ok:true,json:async()=>catalog});}});
  await new Promise(resolve=>d.window.addEventListener('load',()=>setTimeout(resolve,10)));
  assert.deepEqual(errors,[]);assert.ok(requests.includes('assets/reader.js'));assert.ok(requests.includes('assets/style.css'));assert.equal(d.window.document.querySelectorAll('.book').length,1);d.window.document.querySelector('#about-open').click();assert.ok(d.window.document.querySelector('#about-dialog').open);d.window.document.querySelector('#about-close').click();assert.equal(d.window.document.querySelector('#about-dialog').open,false);d.window.close();
+});
+const aozoraSample=Buffer.from('kK+CzI7ojoYNConLi/MgjeyO0g0KDQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tDQqBeYNlg0yDWINnkoaCyYy7guqC6YtMjYaCyYLCgqKCxIF6DQqBc4F0gUaDi4NyDQotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tDQoNCoFAgWKL4onNgXOCrILxgqqBdILMlumBQpCvgXOC2YK1gXSC8Iypj+OCsILpgUINCg0KkuqWe4FGgXWOjoyxl3CCzJZ7gXYNCpP8l82BRo6OjLGT/JfNjtINCo1akLOBRo6OjLGNWpCzjtINCpDCi/OVtozJjeyQrIN0g0CDQ4OLgUYNCoKxgsyDdINAg0ODi4LNjo6MsZdwgsyRbo3sgsWCt4FCDQo=','base64');
+async function zipFixture(){const tmp=await mkdtemp(path.join(os.tmpdir(),'mdyomu-zip-'));const input=path.join(tmp,'input'),folder=path.join(input,'作品フォルダー'),out=path.join(tmp,'out');await mkdir(folder,{recursive:true});await writeFile(path.join(folder,'book.zip'),zipSync({'book.txt':aozoraSample,'README.txt':strToU8('Not part of the novel'),'images/cover.png':new Uint8Array([1,2,3])}));return {tmp,input,folder,out};}
+test('Aozora Shift_JIS and UTF-8 parsing preserves ruby, metadata and provenance safely',()=>{
+ const source=decodeAozora(aozoraSample);assert.match(source,/星の手紙/);const parsed=parseAozora(source);assert.equal(parsed.title,'星の手紙');assert.equal(parsed.author,'架空 作者');assert.match(parsed.html,/<ruby>銀河<rp>（<\/rp><rt>ぎんが<\/rt>/);assert.match(parsed.html,/<ruby>星<rp>（<\/rp><rt>ほし<\/rt>/);assert.match(parsed.html,/入力：試験入力者/);assert.match(parsed.html,/底本：「試験用の本」/);assert.ok(parsed.html.includes('aozora-source'));
+ const utf8=decodeAozora(strToU8('作品\n著者\n\n<script>alert(1)</script>\n※［＃外字、U+20B9F］\n［＃ここから二字下げ］'));const safe=parseAozora(utf8);assert.ok(!safe.html.includes('<script>'));assert.match(safe.html,/&lt;script&gt;/);assert.ok(safe.html.includes(String.fromCodePoint(0x20b9f)));assert.match(safe.html,/ここから二字下げ/);
+});
+test('dropping an Aozora ZIP builds a novel and accepts optional metadata, Markdown and cover',async()=>{
+ const f=await zipFixture();await buildSite(f.input,f.out);let catalog=JSON.parse(await readFile(path.join(f.out,'catalog.json'),'utf8'));assert.equal(catalog.novels.length,1);const entry=catalog.novels[0];assert.equal(entry.title,'星の手紙');assert.equal(entry.author,'架空 作者');assert.equal(entry.genre,'青空文庫');assert.equal(entry.count,1);
+ let novel=decode(await readFile(path.join(f.out,entry.file),'utf8')).novel;assert.equal(novel.chapters[0].format,'aozora');assert.equal(novel.chapters[0].id,'book.zip!/book.txt');assert.match(novel.chapters[0].html,/入力：試験入力者/);
+ await writeFile(path.join(f.folder,'novel.json'),JSON.stringify({title:'指定タイトル',author:'指定著者',genre:'文学',priority:20}));await writeFile(path.join(f.folder,'after.md'),'# あとがき\n\nMarkdownも追加できます。');await writeFile(path.join(f.folder,'cover.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==','base64'));await buildSite(f.input,f.out);catalog=JSON.parse(await readFile(path.join(f.out,'catalog.json'),'utf8'));assert.equal(catalog.novels[0].title,'指定タイトル');assert.equal(catalog.novels[0].author,'指定著者');assert.equal(catalog.novels[0].count,2);assert.match(catalog.novels[0].cover,/^data:image\/png;base64,/);
+});
+test('Aozora invalid or non-text ZIP has a useful error and drafts skip import',async()=>{
+ const f=await zipFixture();await writeFile(path.join(f.folder,'book.zip'),zipSync({'book.html':strToU8('<html>not text</html>')}));await assert.rejects(buildSite(f.input,f.out),/テキストファイル/);await writeFile(path.join(f.folder,'book.zip'),'broken ZIP');await assert.rejects(buildSite(f.input,f.out),/book\.zip/);
+ await writeFile(path.join(f.folder,'novel.json'),'{"draft":true}');await buildSite(f.input,f.out);assert.equal(JSON.parse(await readFile(path.join(f.out,'catalog.json'),'utf8')).novels.length,0);
+});
+test('original Aozora ruby toggles without a font and speech uses readings only once',async()=>{
+ const f=await zipFixture();await build(f.input,f.out);const entry=decode(await readFile(path.join(f.out,'index.html'),'utf8')).novels[0];const html=await readFile(path.join(f.out,entry.file),'utf8');let audio;const d=dom(html,{},w=>{audio=mockSpeech(w);});const doc=d.window.document;assert.ok(doc.querySelector('#body').classList.contains('aozora-text'));assert.ok(doc.querySelector('ruby rt'));selectValue(d,'furigana','on');assert.equal(doc.querySelector('#optional-furigana-font'),null);assert.match(doc.querySelector('#furigana-status').textContent,/原文/);assert.equal(doc.querySelector('#body').classList.contains('no-furigana'),false);
+ doc.querySelector('#listen').click();const spoken=audio.spoken.at(-1).text;assert.match(spoken,/ぎんが/);assert.ok(!spoken.includes('銀河ぎんが'));assert.ok(!spoken.includes('入力'));selectValue(d,'furigana','off');assert.ok(doc.querySelector('#body').classList.contains('no-furigana'));d.window.close();
 });
