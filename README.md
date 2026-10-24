@@ -35,6 +35,13 @@ npm run build -- ./novels ./docs
 
 入力と出力は別のフォルダーにしてください。出力先には生成ファイルの管理用JSONも作られます。次回生成時に、削除・非公開にした作品の以前の生成HTMLを消すために使います。公開サーバーへの反映時も削除を同期してください。
 
+## 公開サイトと自動更新
+
+- 公開サイト: https://oosawak.github.io/MdYomuKiku/
+- `novels/` などを `main` へpushすると、GitHub Actions「Build novels and publish Pages」が生成・テスト・公開まで自動で行います（1日2回の定期実行もあります）。生成物はbotが `docs/` へcommitします。
+- 統合ポータル「まちのつながり」向けに、ビルド後 `scripts/make_portal_feed.py` が `docs/catalog.json` から共通フィード（static-site-feed/v1）を生成します。フィードURL: https://oosawak.github.io/MdYomuKiku/data/sites/yomukiku.json
+- ポータル（community-portal）はこのフィードを6時間ごとに取得し、全作品をポータルに掲載します。
+
 ## 原稿の構成
 
 ```text
