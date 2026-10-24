@@ -901,6 +901,23 @@
       ]
     },
     {
+      "id": "道程",
+      "title": "道程",
+      "author": "高村光太郎",
+      "genre": "青空文庫",
+      "description": "",
+      "status": "完結済",
+      "tags": [],
+      "priority": 0,
+      "updated": "2026-10-24",
+      "cover": "",
+      "file": "work-6YGT56iL.html",
+      "count": 1,
+      "chapterIds": [
+        "59185_ruby_75130.zip!/dotei.txt"
+      ]
+    },
+    {
       "id": "猫が店番する古書店",
       "title": "猫が店番する古書店",
       "author": "本宮 しずく",
