@@ -82,10 +82,10 @@ export async function build(input, output, options = {}) {
     catch(e) { if (e.code!=='ENOENT') throw new Error(`${folder}/novel.json: ${e.message}`); }
     if (meta===null || typeof meta!=='object' || Array.isArray(meta)) throw new Error(`${folder}/novel.json はオブジェクトを指定してください`);
     if (meta.draft === true) continue;
-    for (const key of ['title','author','genre','description','status','updated','cover']) if (meta[key] !== undefined && typeof meta[key] !== 'string') throw new Error(`${folder}: ${key} は文字列で指定してください`);
+    for (const key of ['title','subtitle','author','genre','description','status','updated','cover']) if (meta[key] !== undefined && typeof meta[key] !== 'string') throw new Error(`${folder}: ${key} は文字列で指定してください`);
     if (meta.tags !== undefined && (!Array.isArray(meta.tags) || meta.tags.some(t=>typeof t!=='string'))) throw new Error(`${folder}: tags は文字列の配列で指定してください`);
     if (meta.priority !== undefined && !Number.isFinite(meta.priority)) throw new Error(`${folder}: priority は数値で指定してください`);
-    const novel={id:dir.name==='.'?'@root:'+path.basename(root):dir.name,title:meta.title||path.basename(folder),author:meta.author||'作者未設定',genre:meta.genre||'その他',description:meta.description||'',status:meta.status||'連載中',tags:meta.tags||[],priority:meta.priority||0,chapters:[]};
+    const novel={id:dir.name==='.'?'@root:'+path.basename(root):dir.name,title:meta.title||path.basename(folder),...(meta.subtitle?{subtitle:meta.subtitle}:{}),author:meta.author||'作者未設定',genre:meta.genre||'その他',description:meta.description||'',status:meta.status||'連載中',tags:meta.tags||[],priority:meta.priority||0,chapters:[]};
     let updated=0;
     for (const file of chapters) {
       // Root-level work does not include sibling work directories.
@@ -132,7 +132,7 @@ export async function build(input, output, options = {}) {
   await writeGenerated(path.join(out,'assets/reader.js'),js);
   const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><link rel="stylesheet" href="assets/style.css"><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="assets/reader.js" defer></script></body></html>`;
   await mkdir(out,{recursive:true});
-  for (const n of novels) await writeGenerated(path.join(out,n.file),page(n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
+  for (const n of novels) await writeGenerated(path.join(out,n.file),page(n.subtitle?`${n.title} ― ${n.subtitle}`:n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
   const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length,chapterIds:chapters.map(c=>c.id)}))};
   await writeGenerated(path.join(out,'index.html'),page('物語　よむ、きく。',catalogMode==='external'?{type:'library',catalogUrl:'catalog.json'}:catalog));
   if(catalogMode==='external') await writeGenerated(path.join(out,'catalog.json'),JSON.stringify(catalog,null,2)+'\n');
