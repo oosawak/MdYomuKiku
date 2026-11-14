@@ -55,7 +55,9 @@ async function render(md, file, root) {
       if (token.type === 'link' && !/^(?:https?:|mailto:|#)/i.test(token.href)) token.href = '#';
     }
   });
-  return parser.parse(md);
+  const html=await parser.parse(md);
+  // Markdown の章でも青空文庫式ルビ（｜本文《るび》）を変換する。タグの外側のテキストだけが対象。
+  return html.split(/(<[^>]+>)/g).map(part=>part.startsWith('<')?part:part.replace(/｜([^｜《》<>\n]+)《([^》<>\n]+)》/g,'<ruby>$1<rp>（</rp><rt>$2</rt><rp>）</rp></ruby>')).join('');
 }
 export async function build(input, output, options = {}) {
   const fontMode=options.font || 'system';
