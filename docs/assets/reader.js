@@ -143,11 +143,14 @@ function renderApp(){
   function changeSpeech(){stop();changeBook(n.id,{speech:{voiceURI:document.querySelector('#voice').value,rate:Number(document.querySelector('#rate').value)}});}
   document.querySelector('#voice').onchange=changeSpeech;document.querySelector('#rate').onchange=changeSpeech;document.querySelector('#reset-speech').onclick=()=>{stop();changeBook(n.id,{speech:null});refreshToolbar();};
   // null means inherit the user's basic voice rather than override it.
+  // 作品内で一度ルビが付いた言葉は、読み上げでは全ての出現にその読みを使う（表示は変えない）。
+  const readings=(()=>{const map=new Map();const tpl=document.createElement('template');for(const c of n.chapters){tpl.innerHTML=c.html;tpl.content.querySelectorAll('ruby').forEach(r=>{const base=r.firstChild?.textContent||'';const rt=r.querySelector('rt')?.textContent||'';if(base&&rt&&!map.has(base))map.set(base,rt);});}return [...map.entries()].sort((a,b)=>b[0].length-a[0].length);})();
+  const applyReadings=text=>{for(const [base,rt] of readings)if(text.includes(base))text=text.split(base).join(rt);return text;};
   function speak(){
     if(!supported)return;if(speaking){if(paused){speechSynthesis.resume();paused=false;}else{speechSynthesis.pause();paused=true;}document.querySelector('#listen').textContent=paused?'▶ 再開':'Ⅱ 一時停止';return;}
     stop();speaking=true;const current=++speechId;
     const blocks=[...body.querySelectorAll('p,h1,h2,h3,h4,li,blockquote,pre')].filter(el=>!el.closest('.aozora-source')&&!el.querySelector('p,li,blockquote,pre'));
-    const queue=blocks.flatMap(el=>{const copy=el.cloneNode(true);copy.querySelectorAll('ruby').forEach(ruby=>ruby.replaceWith(document.createTextNode(ruby.querySelector('rt')?.textContent||ruby.firstChild?.textContent||'')));copy.querySelectorAll('.aozora-note,rp,rt').forEach(node=>node.remove());return(copy.textContent.match(/[^。！？\n]{1,100}[。！？\n]?/gu)||[]).map(text=>({text,el}));});let pos=0;
+    const queue=blocks.flatMap(el=>{const copy=el.cloneNode(true);copy.querySelectorAll('ruby').forEach(ruby=>ruby.replaceWith(document.createTextNode(ruby.querySelector('rt')?.textContent||ruby.firstChild?.textContent||'')));copy.querySelectorAll('.aozora-note,rp,rt').forEach(node=>node.remove());return(applyReadings(copy.textContent).match(/[^。！？\n]{1,100}[。！？\n]?/gu)||[]).map(text=>({text,el}));});let pos=0;
     function next(){if(current!==speechId)return;body.querySelectorAll('.speaking').forEach(p=>p.classList.remove('speaking'));if(pos>=queue.length){stop();status.textContent='この話の読み上げが終わりました。';return;}const part=queue[pos++];part.el.classList.add('speaking');const u=utterance(part.text,speechPrefs(n.id));u.onend=next;u.onerror=e=>{if(current===speechId&&e.error!=='canceled'&&e.error!=='interrupted'){stop();status.textContent=`読み上げできませんでした (${e.error})。端末の音声設定をご確認ください。`;}};speechSynthesis.speak(u);}
     status.textContent='読み上げ中：本文の段落を順番に読みます。';document.querySelector('#listen').textContent='Ⅱ 一時停止';next();
   }
