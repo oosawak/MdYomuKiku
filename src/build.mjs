@@ -130,7 +130,7 @@ export async function build(input, output, options = {}) {
   await mkdir(path.join(out,'assets'),{recursive:true});
   await writeGenerated(path.join(out,'assets/style.css'),css);
   await writeGenerated(path.join(out,'assets/reader.js'),js);
-  const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><link rel="stylesheet" href="assets/style.css"><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="assets/reader.js" defer></script></body></html>`;
+  const page=(title,data)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><link rel="stylesheet" href="assets/style.css"><body><noscript>閲覧にはJavaScriptを有効にしてください。</noscript><div id="app"></div>${notices}<script id="book-data" type="application/octet-stream">${b64(JSON.stringify({...data,fontMode}))}</script><script src="assets/reader.js" defer></script><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "cdf4ee53507948e4a412f503875833cd"}'></script></body></html>`;
   await mkdir(out,{recursive:true});
   for (const n of novels) await writeGenerated(path.join(out,n.file),page(n.subtitle?`${n.title} ― ${n.subtitle}`:n.title,{type:'novel',novel:n,...(fontMode==='system'?{furiganaFontUrl:'assets/FurifontSans-Regular.woff2'}:{})}));
   const catalog={type:'library',novels:novels.map(({chapters,...n})=>({...n,count:chapters.length,chapterIds:chapters.map(c=>c.id)}))};
